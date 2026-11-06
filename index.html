@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Braze Web SDK test bench</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --panel: #ffffff; --ink: #1b1f24; --muted: #5d6671;
+    --line: #d9dde3; --accent: #3a3fd8; --accent-ink: #ffffff;
+    --ok: #12794b; --err: #b3261e; --log-bg: #12151a; --log-ink: #d7dde5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14171b; --panel: #1c2026; --ink: #e8ebef; --muted: #98a1ad;
+      --line: #2e343c; --accent: #8c91ff; --accent-ink: #11131a;
+      --ok: #55c58d; --err: #ff8a80; --log-bg: #0c0e11; --log-ink: #d7dde5;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 14px 20px; border-bottom: 1px solid var(--line); background: var(--panel);
+           display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 650; }
+  #status { font-size: 13px; color: var(--muted); }
+  #status.ready { color: var(--ok); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 16px; padding: 16px 20px; align-items: start; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+  .col { display: grid; gap: 12px; }
+  details { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+  summary { padding: 10px 14px; cursor: pointer; font-weight: 600; }
+  .body { padding: 4px 14px 14px; display: grid; gap: 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+  label { display: grid; gap: 3px; font-size: 12px; color: var(--muted); flex: 1 1 140px; }
+  input, select, textarea { font: inherit; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px; width: 100%; }
+  textarea { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; min-height: 54px; }
+  button { font: inherit; padding: 6px 12px; border-radius: 4px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  button.danger { color: var(--err); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .hint { font-size: 12px; color: var(--muted); margin: 0; }
+  #logpanel { position: sticky; top: 16px; background: var(--log-bg); border-radius: 6px; overflow: hidden; }
+  #logbar { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px;
+            color: var(--log-ink); border-bottom: 1px solid #2a2f37; font-weight: 600; }
+  #logbar button { background: transparent; color: var(--log-ink); border-color: #3a414b; padding: 3px 8px; }
+  #log { margin: 0; padding: 10px 12px; height: calc(100vh - 140px); min-height: 280px; overflow: auto;
+         color: var(--log-ink); font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+  .l-err { color: #ff8a80; } .l-ok { color: #55c58d; } .l-dim { color: #8b95a1; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Braze Web SDK test bench</h1>
+  <span id="status">SDK not initialized</span>
+</header>
+
+<main>
+<div class="col">
+
+  <details open>
+    <summary>1. Initialize</summary>
+    <div class="body">
+      <div class="row">
+        <label>API key (Web)<input id="apiKey" autocomplete="off" placeholder="xxxxxxxx-xxxx-..."></label>
+        <label>SDK endpoint<input id="baseUrl" autocomplete="off" placeholder="sdk.iad-01.braze.com"></label>
+        <label>SDK version<input id="sdkVersion" value="7.1"></label>
+      </div>
+      <div class="row">
+        <label>Initial external ID (optional)<input id="initId" autocomplete="off"></label>
+        <label>Push service worker path<input id="swPath" value="/service-worker.js"></label>
+      </div>
+      <div class="row">
+        <label style="flex:0 0 auto;display:flex;gap:6px;align-items:center"><input type="checkbox" id="optLog" style="width:auto" checked> Verbose logging</label>
+        <label style="flex:0 0 auto;display:flex;gap:6px;align-items:center"><input type="checkbox" id="optIam" style="width:auto" checked> Auto-show in-app messages</label>
+        <label style="flex:0 0 auto;display:flex;gap:6px;align-items:center"><input type="checkbox" id="optSession" style="width:auto" checked> Open session on init</label>
+        <label style="flex:0 0 auto;display:flex;gap:6px;align-items:center"><input type="checkbox" id="optCC" style="width:auto"> Allow user supplied JS (Content Cards)</label>
+      </div>
+      <div class="row">
+        <button class="primary" id="btnInit">Load SDK and initialize</button>
+        <button id="btnSave">Save settings</button>
+      </div>
+      <p class="hint">Settings are saved in this browser's localStorage. After init, <code>window.braze</code> is available in DevTools.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>2. Identity</summary>
+    <div class="body">
+      <div class="row">
+        <label>External ID<input id="extId" autocomplete="off"></label>
+        <button data-needs-sdk id="btnChange">changeUser</button>
+      </div>
+      <div class="row">
+        <label>Alias name<input id="aliasName"></label>
+        <label>Alias label<input id="aliasLabel"></label>
+        <button data-needs-sdk id="btnAlias">addAlias</button>
+      </div>
+      <div class="row">
+        <button data-needs-sdk id="btnDevice">Get device ID</button>
+        <button data-needs-sdk id="btnUserId">Get external ID</button>
+        <button data-needs-sdk id="btnSession">openSession</button>
+        <button data-needs-sdk id="btnFlush">Flush data</button>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>3. User attributes</summary>
+    <div class="body">
+      <div class="row">
+        <label>Email<input id="aEmail" type="email"></label>
+        <label>First name<input id="aFirst"></label>
+        <label>Last name<input id="aLast"></label>
+      </div>
+      <div class="row">
+        <label>Phone (E.164)<input id="aPhone" placeholder="+61400000000"></label>
+        <label>Country<input id="aCountry" placeholder="AU"></label>
+        <label>Language<input id="aLang" placeholder="en"></label>
+        <button data-needs-sdk id="btnStd">Set standard attributes</button>
+      </div>
+      <div class="row">
+        <label>Custom key<input id="cKey"></label>
+        <label>Value<input id="cVal"></label>
+        <label>Type
+          <select id="cType"><option>string</option><option>number</option><option>boolean</option><option>date</option></select>
+        </label>
+        <button data-needs-sdk id="btnCustom">Set custom attribute</button>
+      </div>
+      <div class="row">
+        <button data-needs-sdk id="btnInc">Increment by 1</button>
+        <button data-needs-sdk id="btnArrAdd">Add to array</button>
+        <button data-needs-sdk id="btnArrRem">Remove from array</button>
+        <button data-needs-sdk id="btnUnset">Set to null</button>
+      </div>
+      <p class="hint">Increment and array actions use the custom key and value above.</p>
+      <div class="row">
+        <label>Email subscription
+          <select id="subEmail"><option>opted_in</option><option>subscribed</option><option>unsubscribed</option></select>
+        </label>
+        <button data-needs-sdk id="btnSubEmail">Set email subscription</button>
+      </div>
+      <div class="row">
+        <label>Subscription group ID<input id="sgId"></label>
+        <button data-needs-sdk id="btnSgAdd">Add to group</button>
+        <button data-needs-sdk id="btnSgRem">Remove from group</button>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>4. Events and purchases</summary>
+    <div class="body">
+      <div class="row">
+        <label>Event name<input id="evName"></label>
+      </div>
+      <label>Properties (JSON)<textarea id="evProps">{"source": "test-bench"}</textarea></label>
+      <div class="row"><button data-needs-sdk id="btnEvent">logCustomEvent</button></div>
+      <div class="row">
+        <label>Product ID<input id="pId" value="sku_123"></label>
+        <label>Price<input id="pPrice" type="number" step="0.01" value="19.99"></label>
+        <label>Currency<input id="pCur" value="AUD"></label>
+        <label>Qty<input id="pQty" type="number" value="1"></label>
+        <button data-needs-sdk id="btnPurchase">logPurchase</button>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>5. In-app messages</summary>
+    <div class="body">
+      <div class="row">
+        <button data-needs-sdk id="btnIamLog">Log payloads to console</button>
+        <button data-needs-sdk id="btnIamAuto">Auto-show</button>
+        <button data-needs-sdk id="btnIamHide">Hide current</button>
+        <button data-needs-sdk id="btnIamClear">Remove subscriptions</button>
+      </div>
+      <p class="hint">Trigger with an action-based campaign (custom event above) or a session-start campaign (openSession).</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>6. Content Cards</summary>
+    <div class="body">
+      <div class="row">
+        <button data-needs-sdk id="btnCCRefresh">Refresh</button>
+        <button data-needs-sdk id="btnCCCache">Log cached cards</button>
+        <button data-needs-sdk id="btnCCToggle">Toggle feed</button>
+        <button data-needs-sdk id="btnCCSub">Subscribe to updates</button>
+      </div>
+      <div id="ccHost"></div>
+    </div>
+  </details>
+
+  <details>
+    <summary>7. Feature Flags</summary>
+    <div class="body">
+      <div class="row">
+        <label>Flag ID<input id="ffId"></label>
+        <button data-needs-sdk id="btnFFRefresh">Refresh</button>
+        <button data-needs-sdk id="btnFFAll">List all</button>
+        <button data-needs-sdk id="btnFFGet">Get one</button>
+        <button data-needs-sdk id="btnFFImp">Log impression</button>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>8. Web push</summary>
+    <div class="body">
+      <div class="row">
+        <button data-needs-sdk id="btnPushState">Check state</button>
+        <button data-needs-sdk id="btnPushAsk">Request permission</button>
+        <button data-needs-sdk id="btnPushOff">Unregister</button>
+      </div>
+      <p class="hint">Push needs a secure context. <code>http://localhost</code> counts, so it works here. Opening the file via <code>file://</code> does not.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>9. Reset and consent</summary>
+    <div class="body">
+      <div class="row">
+        <button class="danger" data-needs-sdk id="btnWipe">wipeData and reload</button>
+        <button data-needs-sdk id="btnStop">stopWebTracking</button>
+        <button data-needs-sdk id="btnResume">resumeWebTracking</button>
+        <button data-needs-sdk id="btnDisable">disableSDK</button>
+        <button data-needs-sdk id="btnEnable">enableSDK</button>
+      </div>
+    </div>
+  </details>
+
+</div>
+
+<aside id="logpanel">
+  <div id="logbar"><span>Console</span><button id="btnClear">Clear</button></div>
+  <pre id="log"></pre>
+</aside>
+</main>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const logEl = $("log");
+  const FIELDS = ["apiKey","baseUrl","sdkVersion","initId","swPath"];
+  const FLAGS  = ["optLog","optIam","optSession","optCC"];
+
+  function log(msg, cls, obj) {
+    const line = document.createElement("div");
+    if (cls) line.className = cls;
+    const t = new Date().toLocaleTimeString();
+    let text = "[" + t + "] " + msg;
+    if (obj !== undefined) {
+      try { text += " " + JSON.stringify(obj, null, 2); } catch (e) { text += " " + String(obj); }
+    }
+    line.textContent = text;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  window.tlog = log;
+  $("btnClear").onclick = () => { logEl.textContent = ""; };
+
+  // Mirror the SDK's own console output into the panel.
+  ["log","info","warn","error"].forEach(level => {
+    const orig = console[level].bind(console);
+    console[level] = function () {
+      orig.apply(null, arguments);
+      const s = Array.prototype.map.call(arguments, a => typeof a === "string" ? a : (() => { try { return JSON.stringify(a); } catch (e) { return String(a); } })()).join(" ");
+      if (s.indexOf("Braze") !== -1 || s.indexOf("braze") !== -1 || s.indexOf("appboy") !== -1) {
+        log(s, level === "error" ? "l-err" : "l-dim");
+      }
+    };
+  });
+
+  // Persist settings
+  function save() {
+    const s = {};
+    FIELDS.forEach(k => s[k] = $(k).value);
+    FLAGS.forEach(k => s[k] = $(k).checked);
+    try { localStorage.setItem("braze-test-bench", JSON.stringify(s)); log("Settings saved", "l-ok"); } catch (e) { log("Could not save settings: " + e.message, "l-err"); }
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem("braze-test-bench") || "{}");
+      FIELDS.forEach(k => { if (s[k] !== undefined) $(k).value = s[k]; });
+      FLAGS.forEach(k => { if (s[k] !== undefined) $(k).checked = s[k]; });
+    } catch (e) {}
+  }
+  $("btnSave").onclick = save;
+  load();
+
+  function setReady(on) {
+    document.querySelectorAll("[data-needs-sdk]").forEach(b => b.disabled = !on);
+    const st = $("status");
+    st.textContent = on ? "SDK ready (window.braze)" : "SDK not initialized";
+    st.className = on ? "ready" : "";
+  }
+  setReady(false);
+
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = src; s.onload = res; s.onerror = () => rej(new Error("Failed to load " + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  $("btnInit").onclick = async function () {
+    const apiKey = $("apiKey").value.trim();
+    const baseUrl = $("baseUrl").value.trim().replace(/^https?:\/\//, "");
+    const ver = $("sdkVersion").value.trim() || "7.1";
+    if (!apiKey || !baseUrl) { log("API key and SDK endpoint are required.", "l-err"); return; }
+    save();
+    try {
+      if (!window.braze) {
+        const url = "https://js.appboycdn.com/web-sdk/" + ver + "/braze.min.js";
+        log("Loading " + url);
+        await loadScript(url);
+      }
+      const ok = braze.initialize(apiKey, {
+        baseUrl: baseUrl,
+        enableLogging: $("optLog").checked,
+        serviceWorkerLocation: $("swPath").value.trim() || "/service-worker.js",
+        allowUserSuppliedJavascript: $("optCC").checked
+      });
+      if (!ok) { log("initialize() returned false. Check API key and endpoint.", "l-err"); return; }
+      if ($("optIam").checked) braze.automaticallyShowInAppMessages();
+      const id = $("initId").value.trim();
+      if (id) braze.changeUser(id);
+      if ($("optSession").checked) braze.openSession();
+      setReady(true);
+      log("Initialized. SDK version: " + (braze.getSdkVersion ? braze.getSdkVersion() : ver), "l-ok");
+    } catch (e) { log(e.message, "l-err"); }
+  };
+
+  const on = (id, fn) => $(id).addEventListener("click", () => {
+    try { fn(); } catch (e) { log(id + ": " + e.message, "l-err"); }
+  });
+  const u = () => braze.getUser();
+  const flush = () => braze.requestImmediateDataFlush(() => log("Data flush complete", "l-dim"));
+  const typed = () => {
+    const v = $("cVal").value, t = $("cType").value;
+    if (t === "number") return Number(v);
+    if (t === "boolean") return v === "true";
+    if (t === "date") return new Date(v);
+    return v;
+  };
+  const report = (label, ok) => log(label + ": " + (ok === false ? "rejected by SDK" : "queued"), ok === false ? "l-err" : "l-ok");
+
+  // Identity
+  on("btnChange", () => { braze.changeUser($("extId").value.trim()); log("changeUser(" + $("extId").value.trim() + ")", "l-ok"); flush(); });
+  on("btnAlias", () => report("addAlias", u().addAlias($("aliasName").value, $("aliasLabel").value)));
+  on("btnDevice", () => log("Device ID: " + braze.getDeviceId(), "l-ok"));
+  on("btnUserId", () => log("External ID: " + u().getUserId(), "l-ok"));
+  on("btnSession", () => { braze.openSession(); log("openSession()", "l-ok"); });
+  on("btnFlush", flush);
+
+  // Attributes
+  on("btnStd", () => {
+    const map = [["aEmail","setEmail"],["aFirst","setFirstName"],["aLast","setLastName"],["aPhone","setPhoneNumber"],["aCountry","setCountry"],["aLang","setLanguage"]];
+    map.forEach(([f, m]) => { const v = $(f).value.trim(); if (v) report(m, u()[m](v)); });
+    flush();
+  });
+  on("btnCustom", () => { report("setCustomUserAttribute", u().setCustomUserAttribute($("cKey").value, typed())); flush(); });
+  on("btnInc", () => { report("increment", u().incrementCustomUserAttribute($("cKey").value, 1)); flush(); });
+  on("btnArrAdd", () => { report("addToCustomAttributeArray", u().addToCustomAttributeArray($("cKey").value, $("cVal").value)); flush(); });
+  on("btnArrRem", () => { report("removeFromCustomAttributeArray", u().removeFromCustomAttributeArray($("cKey").value, $("cVal").value)); flush(); });
+  on("btnUnset", () => { report("set null", u().setCustomUserAttribute($("cKey").value, null)); flush(); });
+  on("btnSubEmail", () => { report("setEmailNotificationSubscriptionType", u().setEmailNotificationSubscriptionType($("subEmail").value)); flush(); });
+  on("btnSgAdd", () => { u().addToSubscriptionGroup($("sgId").value.trim()); log("addToSubscriptionGroup", "l-ok"); flush(); });
+  on("btnSgRem", () => { u().removeFromSubscriptionGroup($("sgId").value.trim()); log("removeFromSubscriptionGroup", "l-ok"); flush(); });
+
+  // Events
+  on("btnEvent", () => {
+    let props; const raw = $("evProps").value.trim();
+    if (raw) { try { props = JSON.parse(raw); } catch (e) { log("Properties are not valid JSON", "l-err"); return; } }
+    report("logCustomEvent(" + $("evName").value + ")", braze.logCustomEvent($("evName").value.trim(), props));
+    flush();
+  });
+  on("btnPurchase", () => {
+    report("logPurchase", braze.logPurchase($("pId").value, Number($("pPrice").value), $("pCur").value, Number($("pQty").value)));
+    flush();
+  });
+
+  // IAM
+  let iamSubs = [];
+  on("btnIamLog", () => {
+    iamSubs.push(braze.subscribeToInAppMessage(msg => { log("In-app message received", "l-ok", msg); braze.showInAppMessage(msg); }));
+    log("Subscribed. Messages will be logged, then shown.", "l-dim");
+  });
+  on("btnIamAuto", () => { braze.automaticallyShowInAppMessages(); log("Auto-show enabled", "l-ok"); });
+  on("btnIamHide", () => braze.hideCurrentInAppMessage());
+  on("btnIamClear", () => { braze.removeAllSubscriptions(); iamSubs = []; log("All subscriptions removed", "l-ok"); });
+
+  // Content cards
+  on("btnCCRefresh", () => braze.requestContentCardsRefresh(
+    () => { const c = braze.getCachedContentCards(); log("Refreshed. " + c.cards.length + " card(s)", "l-ok"); },
+    () => log("Content Cards refresh failed", "l-err")));
+  on("btnCCCache", () => { const c = braze.getCachedContentCards(); log("Cached cards (" + c.cards.length + ")", "l-ok", c.cards.map(x => ({ id: x.id, type: x.constructor.name, url: x.url, extras: x.extras, title: x.title }))); });
+  on("btnCCToggle", () => braze.toggleContentCards($("ccHost")));
+  on("btnCCSub", () => {
+    if (typeof braze.subscribeToContentCardsEvents === "function") {
+      braze.subscribeToContentCardsEvents(ev => log("Content Cards event", "l-ok", ev));
+      log("Subscribed with subscribeToContentCardsEvents (7.0+). Events are logged as received.", "l-dim");
+    } else {
+      braze.subscribeToContentCardsUpdates(c => log("Content Cards updated: " + c.cards.length, "l-ok"));
+      log("Subscribed with subscribeToContentCardsUpdates (deprecated in 7.0, used on older SDKs)", "l-dim");
+    }
+  });
+
+  // Feature flags
+  on("btnFFRefresh", () => braze.refreshFeatureFlags(() => log("Feature flags refreshed", "l-ok"), () => log("Feature flag refresh failed, or the channel is not enabled", "l-err")));
+  on("btnFFAll", () => log("Feature flags", "l-ok", braze.getAllFeatureFlags().map(f => ({ id: f.id, enabled: f.enabled, properties: f.properties }))));
+  on("btnFFGet", () => { const f = braze.getFeatureFlag($("ffId").value.trim()); log("Flag " + $("ffId").value, f ? "l-ok" : "l-err", f ? { enabled: f.enabled, properties: f.properties } : "not found"); });
+  on("btnFFImp", () => { braze.logFeatureFlagImpression($("ffId").value.trim()); log("Impression logged", "l-ok"); flush(); });
+
+  // Push
+  on("btnPushState", () => log("Push state", "l-ok", {
+    secureContext: window.isSecureContext,
+    supported: braze.isPushSupported(),
+    granted: braze.isPushPermissionGranted(),
+    blocked: braze.isPushBlocked(),
+    notificationPermission: window.Notification ? Notification.permission : "n/a"
+  }));
+  on("btnPushAsk", () => braze.requestPushPermission(
+    () => log("Push permission granted", "l-ok"),
+    (denied) => log("Push permission denied or dismissed", "l-err", denied)));
+  on("btnPushOff", () => braze.unregisterPush(() => log("Push unregistered", "l-ok"), () => log("Unregister failed", "l-err")));
+
+  // Reset
+  on("btnWipe", () => { braze.wipeData(); log("wipeData(). Reloading...", "l-ok"); setTimeout(() => location.reload(), 400); });
+  on("btnStop", () => { braze.stopWebTracking(); log("Tracking stopped", "l-ok"); });
+  on("btnResume", () => { braze.resumeWebTracking(); log("Tracking resumed", "l-ok"); });
+  on("btnDisable", () => { braze.disableSDK(); log("SDK disabled", "l-ok"); });
+  on("btnEnable", () => { braze.enableSDK(); log("SDK enabled", "l-ok"); });
+
+  if (!window.isSecureContext) log("Not a secure context. Serve this over http://localhost instead of file://.", "l-err");
+})();
+</script>
+</body>
+</html>
